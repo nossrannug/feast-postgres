@@ -1,0 +1,12 @@
+.python-version
+venv/
+*.iml
+.idea/
+*.egg-info/
+dist/
+**/__pycache__
+.mypy_cache/
+.pytest_cache/
+.vscode/
+*.code-workspace
+build/
