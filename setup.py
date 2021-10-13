@@ -8,6 +8,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 INSTALL_REQUIRE = [
     "feast>=0.13.0",
     "psycopg2-binary>=2.8.3",
+    "sqlalchemy==1.4.25",
 ]
 
 DEV_REQUIRE = [
@@ -21,7 +22,7 @@ DEV_REQUIRE = [
 
 setup(
     name="feast-postgres",
-    version="0.1.0",
+    version="0.1.1",
     author="Gunnar Sv Sigurbjörnsson",
     author_email="gunnar.sigurbjornsson@gmail.com",
     description="PostgreSQL online and offline store for Feast",
@@ -33,7 +34,7 @@ setup(
         "Bug Tracker": "https://github.com/nossrannug/feast-postgres/issues",
     },
     license='Apache License, Version 2.0',
-    packages=["feast_postgres"],
+    packages=["feast_postgres", "feast_postgres.online_stores", "feast_postgres.offline_stores"],
     install_requires=INSTALL_REQUIRE,
     extras_require={
         "dev": DEV_REQUIRE,

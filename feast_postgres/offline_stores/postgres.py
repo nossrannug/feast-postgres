@@ -9,7 +9,9 @@ import pyarrow
 import pyarrow as pa
 import pyarrow.parquet
 from psycopg2 import sql
+from pydantic import StrictStr
 from pydantic.typing import Literal
+import sqlalchemy
 
 from feast.data_source import DataSource
 from feast.errors import InvalidEntityType
@@ -28,7 +30,7 @@ class PostgreSQLOfflineStoreConfig(PostgreSQLConfig):
     type: Literal[
         "feast_postgres.PostgreSQLOfflineStore"
     ] = "feast_postgres.PostgreSQLOfflineStore"
-
+    db_schema: StrictStr
 
 class PostgreSQLOfflineStore(OfflineStore):
     @staticmethod
@@ -207,31 +209,37 @@ def _get_conn(config: RepoConfig):
 def _append_alias(field_names: List[str], alias: str) -> List[str]:
     return [f"{alias}.{field_name}" for field_name in field_names]
 
+def get_sqlalchemy_engine(config: PostgreSQLOfflineStoreConfig):
+    url = f"postgresql+psycopg2://{config.user}:{config.password}@{config.host}:{config.port}/{config.database}"
+    return sqlalchemy.create_engine(url, client_encoding='utf8', connect_args={'options': '-c search_path={}'.format(config.db_schema)})
 
 def _df_to_table(config: RepoConfig, entity_df: Union[pd.DataFrame, str], table: str):
-    with _get_conn(config) as conn, conn.cursor() as cursor:
-        if isinstance(entity_df, pd.DataFrame):
-            cursor.execute(pd.io.sql.get_schema(entity_df, table))
-            buffer = StringIO()
-            entity_df.to_csv(buffer, header=False, index=False, na_rep="\\N")
-            buffer.seek(0)
-            cursor.copy_from(buffer, table, sep=",")
-            df = entity_df
+    engine = sqlalchemy.create_engine()
+    if isinstance(entity_df, pd.DataFrame):
+        engine.execute(pd.io.sql.get_schema(entity_df, table, con=engine))
+        buffer = StringIO()
+        entity_df.to_csv(buffer, header=False, index=False, na_rep="\\N")
+        buffer.seek(0)
+        raw_con = engine.raw_connection()
+        cursor = raw_con.cursor()
+        cursor.copy_from(buffer, table, sep=",")
+        raw_con.commit()
+        df = entity_df
 
-        elif isinstance(entity_df, str):
-            cursor.execute(
-                sql.SQL(
-                    """
-                    CREATE TABLE {} AS ({})
-                    """
-                ).format(sql.Identifier(table), sql.Literal(entity_df),),
-            )
-            df = PostgreSQLRetrievalJob(
-                f"SELECT * FROM {table} LIMIT 0", config, False, None,
-            ).to_df()
+    elif isinstance(entity_df, str):
+        engine.execute(
+            sql.SQL(
+                """
+                CREATE TABLE {} AS ({})
+                """
+            ).format(sql.Identifier(table), sql.Literal(entity_df),),
+        )
+        df = PostgreSQLRetrievalJob(
+            f"SELECT * FROM {table} LIMIT 0", config, False, None,
+        ).to_df()
 
-        else:
-            raise InvalidEntityType(type(entity_df))
+    else:
+        raise InvalidEntityType(type(entity_df))
 
     return dict(zip(df.columns, df.dtypes))
 
