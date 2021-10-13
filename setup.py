@@ -22,7 +22,7 @@ DEV_REQUIRE = [
 
 setup(
     name="feast-postgres",
-    version="0.1.1",
+    version="0.1.2",
     author="Gunnar Sv Sigurbjörnsson",
     author_email="gunnar.sigurbjornsson@gmail.com",
     description="PostgreSQL online and offline store for Feast",

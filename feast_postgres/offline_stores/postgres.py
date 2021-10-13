@@ -214,7 +214,7 @@ def get_sqlalchemy_engine(config: PostgreSQLOfflineStoreConfig):
     return sqlalchemy.create_engine(url, client_encoding='utf8', connect_args={'options': '-c search_path={}'.format(config.db_schema)})
 
 def _df_to_table(config: RepoConfig, entity_df: Union[pd.DataFrame, str], table: str):
-    engine = sqlalchemy.create_engine()
+    engine = get_sqlalchemy_engine(config.offline_store)
     if isinstance(entity_df, pd.DataFrame):
         engine.execute(pd.io.sql.get_schema(entity_df, table, con=engine))
         buffer = StringIO()
