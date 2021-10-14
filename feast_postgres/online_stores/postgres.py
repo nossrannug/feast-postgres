@@ -7,7 +7,6 @@ import psycopg2
 import pytz
 from psycopg2 import sql
 from psycopg2.extras import execute_values
-from feast_postgres.utils import _get_conn
 from pydantic.schema import Literal
 
 from feast import Entity, FeatureTable
@@ -17,6 +16,7 @@ from feast.infra.online_stores.online_store import OnlineStore
 from feast.protos.feast.types.EntityKey_pb2 import EntityKey as EntityKeyProto
 from feast.protos.feast.types.Value_pb2 import Value as ValueProto
 from feast.repo_config import RepoConfig
+from feast_postgres.utils import _get_conn
 
 from ..postgres_config import PostgreSQLConfig
 

@@ -28,7 +28,6 @@ def df_to_create_table_sql(entity_df, table_name) -> str:
     columns = [
         f""""{f.name}" {arrow_to_pg_type(str(f.type))}""" for f in pa_table.schema
     ]
-    print(columns)
     return f"""
         CREATE TABLE "{table_name}" (
             {", ".join(columns)}

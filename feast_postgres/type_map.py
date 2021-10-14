@@ -97,9 +97,8 @@ def pg_type_to_feast_value_type(type_str: str) -> ValueType:
         else ValueType.UNKNOWN
     )
     if value == ValueType.UNKNOWN:
-        print("/" * 80)
         print("unknown type:", type_str)
-        print("\\" * 80)
+        
     return value
 
 

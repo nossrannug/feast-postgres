@@ -200,7 +200,6 @@ class PostgreSQLRetrievalJob(RetrievalJob):
                     (c.name, pg_type_code_to_arrow(c.type_code))
                     for c in cur.description
                 ]
-                print(fields)
                 data = cur.fetchall()
                 schema = pa.schema(fields)
                 # TODO: Fix...
