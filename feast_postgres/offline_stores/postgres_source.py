@@ -5,6 +5,8 @@ from feast import ValueType
 from feast.data_source import DataSource
 from feast.protos.feast.core.DataSource_pb2 import DataSource as DataSourceProto
 from feast.repo_config import RepoConfig
+from feast_postgres.type_map import pg_type_code_to_pg_type, pg_type_to_feast_value_type
+from feast_postgres.utils import _get_conn
 
 
 class PostgreSQLSource(DataSource):
@@ -69,14 +71,18 @@ class PostgreSQLSource(DataSource):
 
     @staticmethod
     def source_datatype_to_feast_value_type() -> Callable[[str], ValueType]:
-        raise NotImplementedError("PostgreSQLSource does not support inferring types")
+        return pg_type_to_feast_value_type
 
     def get_table_column_names_and_types(
         self, config: RepoConfig
     ) -> Iterable[Tuple[str, str]]:
-        raise NotImplementedError(
-            "PostgreSQLSource does not support inferring features"
-        )
+        with _get_conn(config.offline_store) as conn, conn.cursor() as cur:
+            cur.execute(
+                f"SELECT * FROM ({self.get_table_query_string()}) AS sub LIMIT 0"
+            )
+            return (
+                (c.name, pg_type_code_to_pg_type(c.type_code)) for c in cur.description
+            )
 
     def get_table_query_string(self) -> str:
         return f"({self._postgres_options._query})"

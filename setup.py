@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 INSTALL_REQUIRE = [
     "feast>=0.13.0",
     "psycopg2-binary>=2.8.3",
-    "sqlalchemy==1.4.25",
+    "pyarrow>=2.0.0",
 ]
 
 DEV_REQUIRE = [
@@ -22,7 +22,7 @@ DEV_REQUIRE = [
 
 setup(
     name="feast-postgres",
-    version="0.1.2",
+    version="0.1.3",
     author="Gunnar Sv Sigurbjörnsson",
     author_email="gunnar.sigurbjornsson@gmail.com",
     description="PostgreSQL online and offline store for Feast",

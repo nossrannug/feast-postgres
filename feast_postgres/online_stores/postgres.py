@@ -7,6 +7,7 @@ import psycopg2
 import pytz
 from psycopg2 import sql
 from psycopg2.extras import execute_values
+from feast_postgres.utils import _get_conn
 from pydantic.schema import Literal
 
 from feast import Entity, FeatureTable
@@ -32,18 +33,7 @@ class PostgreSQLOnlineStore(OnlineStore):
     def _get_conn(self, config: RepoConfig):
         if not self._conn:
             assert config.online_store.type == "feast_postgres.PostgreSQLOnlineStore"
-            self._conn = psycopg2.connect(
-                dbname=config.online_store.database,
-                host=config.online_store.host,
-                port=int(config.online_store.port),
-                user=config.online_store.user,
-                password=config.online_store.password,
-                options="-c search_path={}".format(
-                    config.online_store.db_schema
-                    if config.online_store.db_schema
-                    else config.online_store.user
-                ),
-            )
+            self._conn = _get_conn(config.online_store)
         return self._conn
 
     def online_write_batch(
@@ -220,6 +210,11 @@ class PostgreSQLOnlineStore(OnlineStore):
         tables: Sequence[Union[FeatureTable, FeatureView]],
         entities: Sequence[Entity],
     ):
+        schema_name = (
+            config.online_store.db_schema
+            if config.online_store.db_schema
+            else config.online_store.user
+        )
         try:
             with self._get_conn(config) as conn, conn.cursor() as cur:
                 cur.execute(
@@ -227,10 +222,11 @@ class PostgreSQLOnlineStore(OnlineStore):
                         """
                         DROP SCHEMA IF EXISTS {} CASCADE;
                         """
-                    ).format(sql.Identifier(config.online_store.user),)
+                    ).format(sql.Identifier(schema_name),)
                 )
         except Exception:
-            logging.exception("Teardown failed")
+            logging.error("Teardown failed")
+            raise
 
 
 def _table_id(project: str, table: Union[FeatureTable, FeatureView]) -> str:

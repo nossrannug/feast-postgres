@@ -1,26 +1,24 @@
 import contextlib
 from datetime import datetime
-from io import StringIO
-from typing import Callable, ContextManager, Iterator, List, Optional, Union
+from typing import Any, Callable, ContextManager, Dict, Iterator, List, Optional, Union
 
 import pandas as pd
-import psycopg2
 import pyarrow
 import pyarrow as pa
 import pyarrow.parquet
 from psycopg2 import sql
 from pydantic import StrictStr
 from pydantic.typing import Literal
-import sqlalchemy
 
 from feast.data_source import DataSource
-from feast.errors import InvalidEntityType
 from feast.feature_view import FeatureView
 from feast.infra.offline_stores import offline_utils
 from feast.infra.offline_stores.offline_store import OfflineStore, RetrievalJob
 from feast.on_demand_feature_view import OnDemandFeatureView
 from feast.registry import Registry
 from feast.repo_config import RepoConfig
+from feast_postgres.type_map import pg_type_code_to_arrow
+from feast_postgres.utils import _get_conn, df_to_postgres_table, sql_to_postgres_table
 
 from ..postgres_config import PostgreSQLConfig
 from .postgres_source import PostgreSQLSource
@@ -31,6 +29,7 @@ class PostgreSQLOfflineStoreConfig(PostgreSQLConfig):
         "feast_postgres.PostgreSQLOfflineStore"
     ] = "feast_postgres.PostgreSQLOfflineStore"
     db_schema: StrictStr
+
 
 class PostgreSQLOfflineStore(OfflineStore):
     @staticmethod
@@ -95,7 +94,7 @@ class PostgreSQLOfflineStore(OfflineStore):
         @contextlib.contextmanager
         def query_generator() -> Iterator[str]:
             table_name = offline_utils.get_temp_entity_table_name()
-            entity_schema = _df_to_table(config, entity_df, table_name)
+            entity_schema = _df_to_table(config.offline_store, entity_df, table_name)
 
             entity_df_event_timestamp_col = offline_utils.infer_event_timestamp_from_entity_df(
                 entity_schema
@@ -124,7 +123,7 @@ class PostgreSQLOfflineStore(OfflineStore):
             try:
                 yield query
             finally:
-                with _get_conn(config) as conn, conn.cursor() as cur:
+                with _get_conn(config.offline_store) as conn, conn.cursor() as cur:
                     cur.execute(
                         sql.SQL(
                             """
@@ -141,6 +140,17 @@ class PostgreSQLOfflineStore(OfflineStore):
                 feature_refs, project, registry
             ),
         )
+
+
+def _df_to_table(
+    config: PostgreSQLConfig, entity_df: Union[pd.DataFrame, str], table_name: str
+) -> Dict[str, str]:
+    if isinstance(entity_df, pd.DataFrame):
+        return df_to_postgres_table(config, entity_df, table_name)
+    elif isinstance(entity_df, str):
+        return sql_to_postgres_table(config, entity_df, table_name)
+    else:
+        raise TypeError(entity_df)
 
 
 class PostgreSQLRetrievalJob(RetrievalJob):
@@ -162,7 +172,7 @@ class PostgreSQLRetrievalJob(RetrievalJob):
 
             self._query_generator = query_generator
         self.config = config
-        self.connection = _get_conn(self.config)
+        self.connection = _get_conn(self.config.offline_store)
         self._full_feature_names = full_feature_names
         self._on_demand_feature_views = on_demand_feature_views
 
@@ -175,73 +185,39 @@ class PostgreSQLRetrievalJob(RetrievalJob):
         return self._on_demand_feature_views
 
     def _to_df_internal(self) -> pd.DataFrame:
-        with self._query_generator() as query:
-            with self.connection:
-                return pd.read_sql_query(query, self.connection)
+        # We use arrow format because it gives better control of the table schema
+        return self._to_arrow_internal().to_pandas()
 
     def to_sql(self) -> str:
         with self._query_generator() as query:
             return query
 
-    def _to_arrow_internal(self) -> pyarrow.Table:
-        return pa.Table.from_pandas(self._to_df_internal())
+    def _to_arrow_internal(self) -> pa.Table:
+        with self._query_generator() as query:
+            with self.connection as conn, conn.cursor() as cur:
+                cur.execute(query)
+                fields = [
+                    (c.name, pg_type_code_to_arrow(c.type_code))
+                    for c in cur.description
+                ]
+                print(fields)
+                data = cur.fetchall()
+                schema = pa.schema(fields)
+                # TODO: Fix...
+                data_transposed: List[List[Any]] = []
+                for col in range(len(fields)):
+                    data_transposed.append([])
+                    for row in range(len(data)):
+                        data_transposed[col].append(data[row][col])
 
-
-def _get_connection_config(config: PostgreSQLOfflineStoreConfig):
-    db_config = {
-        "dbname": config.database,
-        "host": config.host,
-        "port": int(config.port),
-        "user": config.user,
-        "password": config.password,
-    }
-    if config.db_schema:
-        db_config["options"] = f"-c search_path={config.db_schema}"
-
-    return db_config
-
-
-def _get_conn(config: RepoConfig):
-    assert config.offline_store.type == "feast_postgres.PostgreSQLOfflineStore"
-    return psycopg2.connect(**_get_connection_config(config.offline_store))
+                table = pa.Table.from_arrays(
+                    [pa.array(row) for row in data_transposed], schema=schema
+                )
+                return table
 
 
 def _append_alias(field_names: List[str], alias: str) -> List[str]:
     return [f"{alias}.{field_name}" for field_name in field_names]
-
-def get_sqlalchemy_engine(config: PostgreSQLOfflineStoreConfig):
-    url = f"postgresql+psycopg2://{config.user}:{config.password}@{config.host}:{config.port}/{config.database}"
-    return sqlalchemy.create_engine(url, client_encoding='utf8', connect_args={'options': '-c search_path={}'.format(config.db_schema)})
-
-def _df_to_table(config: RepoConfig, entity_df: Union[pd.DataFrame, str], table: str):
-    engine = get_sqlalchemy_engine(config.offline_store)
-    if isinstance(entity_df, pd.DataFrame):
-        engine.execute(pd.io.sql.get_schema(entity_df, table, con=engine))
-        buffer = StringIO()
-        entity_df.to_csv(buffer, header=False, index=False, na_rep="\\N")
-        buffer.seek(0)
-        raw_con = engine.raw_connection()
-        cursor = raw_con.cursor()
-        cursor.copy_from(buffer, table, sep=",")
-        raw_con.commit()
-        df = entity_df
-
-    elif isinstance(entity_df, str):
-        engine.execute(
-            sql.SQL(
-                """
-                CREATE TABLE {} AS ({})
-                """
-            ).format(sql.Identifier(table), sql.Literal(entity_df),),
-        )
-        df = PostgreSQLRetrievalJob(
-            f"SELECT * FROM {table} LIMIT 0", config, False, None,
-        ).to_df()
-
-    else:
-        raise InvalidEntityType(type(entity_df))
-
-    return dict(zip(df.columns, df.dtypes))
 
 
 # Copied from the Feast Redshift offline store implementation
