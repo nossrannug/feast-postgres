@@ -1,0 +1,11 @@
+version: "3"
+services:
+  db:
+    image: "postgres:14.0"
+    container_name: "feast-postgres-test-db"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=docker
+    # command: postgres -c 'log_statement=all'
+    ports:
+      - "5432:5432"

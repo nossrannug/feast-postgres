@@ -222,10 +222,10 @@ class PostgreSQLOnlineStore(OnlineStore):
                         """
                         DROP SCHEMA IF EXISTS {} CASCADE;
                         """
-                    ).format(sql.Identifier(schema_name),)
+                    ).format(sql.Identifier(schema_name))
                 )
         except Exception:
-            logging.error("Teardown failed")
+            logging.exception("Teardown failed")
             raise
 
 

@@ -3,15 +3,13 @@ from datetime import datetime
 from typing import Any, Callable, ContextManager, Dict, Iterator, List, Optional, Union
 
 import pandas as pd
-import pyarrow
 import pyarrow as pa
-import pyarrow.parquet
 from psycopg2 import sql
 from pydantic import StrictStr
 from pydantic.typing import Literal
 
 from feast.data_source import DataSource
-from feast.feature_view import FeatureView
+from feast.feature_view import DUMMY_ENTITY_ID, DUMMY_ENTITY_VAL, FeatureView
 from feast.infra.offline_stores import offline_utils
 from feast.infra.offline_stores.offline_store import OfflineStore, RetrievalJob
 from feast.on_demand_feature_view import OnDemandFeatureView
@@ -65,6 +63,7 @@ class PostgreSQLOfflineStore(OfflineStore):
         query = f"""
             SELECT
                 {b_field_string}
+                {f", {repr(DUMMY_ENTITY_VAL)} AS {DUMMY_ENTITY_ID}" if not join_key_columns else ""}
             FROM (
                 SELECT {a_field_string},
                 ROW_NUMBER() OVER({partition_by_join_key_string} ORDER BY {timestamp_desc_string}) AS _feast_row
@@ -116,6 +115,7 @@ class PostgreSQLOfflineStore(OfflineStore):
                 query_context,
                 left_table_query_string=table_name,
                 entity_df_event_timestamp_col=entity_df_event_timestamp_col,
+                entity_df_columns=entity_schema.keys(),
                 query_template=MULTIPLE_FEATURE_VIEW_POINT_IN_TIME_JOIN,
                 full_feature_names=full_feature_names,
             )
@@ -286,7 +286,7 @@ WITH entity_dataframe AS (
         {% for feature in featureview.features %}
             {{ feature }} as {% if full_feature_names %}{{ featureview.name }}__{{feature}}{% else %}{{ feature }}{% endif %}{% if loop.last %}{% else %}, {% endif %}
         {% endfor %}
-    FROM {{ featureview.table_subquery }} sub
+    FROM {{ featureview.table_subquery }} AS sub
     WHERE {{ featureview.event_timestamp_column }} <= (SELECT MAX(entity_timestamp) FROM entity_dataframe)
     {% if featureview.ttl == 0 %}{% else %}
     AND {{ featureview.event_timestamp_column }} >= (SELECT MIN(entity_timestamp) FROM entity_dataframe) - {{ featureview.ttl }} * interval '1' second
@@ -335,19 +335,23 @@ WITH entity_dataframe AS (
 */
 {{ featureview.name }}__latest AS (
     SELECT
-        {{featureview.name}}__entity_row_unique_id,
-        MAX(event_timestamp) AS event_timestamp
+        event_timestamp,
+        {% if featureview.created_timestamp_column %}created_timestamp,{% endif %}
+        {{featureview.name}}__entity_row_unique_id
+    FROM
+    (
+        SELECT *,
+            ROW_NUMBER() OVER(
+                PARTITION BY {{featureview.name}}__entity_row_unique_id
+                ORDER BY event_timestamp DESC{% if featureview.created_timestamp_column %},created_timestamp DESC{% endif %}
+            ) AS row_number
+        FROM {{ featureview.name }}__base
         {% if featureview.created_timestamp_column %}
-            ,MAX(created_timestamp) AS created_timestamp
+            INNER JOIN {{ featureview.name }}__dedup
+            USING ({{featureview.name}}__entity_row_unique_id, event_timestamp, created_timestamp)
         {% endif %}
-
-    FROM {{ featureview.name }}__base
-    {% if featureview.created_timestamp_column %}
-        INNER JOIN {{ featureview.name }}__dedup
-        USING ({{featureview.name}}__entity_row_unique_id, event_timestamp, created_timestamp)
-    {% endif %}
-
-    GROUP BY {{featureview.name}}__entity_row_unique_id
+    ) AS sub
+    WHERE row_number = 1
 ),
 
 /*
@@ -365,7 +369,7 @@ WITH entity_dataframe AS (
             ,created_timestamp
         {% endif %}
     )
-) {% if loop.last %}{% else %}, {% endif %}
+){% if loop.last %}{% else %}, {% endif %}
 
 
 {% endfor %}
@@ -374,7 +378,7 @@ WITH entity_dataframe AS (
  The entity_dataframe dataset being our source of truth here.
  */
 
-SELECT *
+SELECT {{ final_output_feature_names | join(', ')}}
 FROM entity_dataframe
 {% for featureview in featureviews %}
 LEFT JOIN (
@@ -384,6 +388,6 @@ LEFT JOIN (
             ,{% if full_feature_names %}{{ featureview.name }}__{{feature}}{% else %}{{ feature }}{% endif %}
         {% endfor %}
     FROM {{ featureview.name }}__cleaned
-) {{featureview.name}} USING ({{featureview.name}}__entity_row_unique_id)
+) AS "{{featureview.name}}" USING ({{featureview.name}}__entity_row_unique_id)
 {% endfor %}
 """

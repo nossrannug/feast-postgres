@@ -98,7 +98,6 @@ def pg_type_to_feast_value_type(type_str: str) -> ValueType:
     )
     if value == ValueType.UNKNOWN:
         print("unknown type:", type_str)
-        
     return value
 
 
