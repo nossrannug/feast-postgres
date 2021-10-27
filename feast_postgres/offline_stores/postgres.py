@@ -1,7 +1,19 @@
 import contextlib
+from dataclasses import asdict
 from datetime import datetime
-from typing import Any, Callable, ContextManager, Dict, Iterator, List, Optional, Union
+from typing import (
+    Any,
+    Callable,
+    ContextManager,
+    Dict,
+    KeysView,
+    Iterator,
+    List,
+    Optional,
+    Union,
+)
 
+from jinja2 import BaseLoader, Environment
 import pandas as pd
 import pyarrow as pa
 from psycopg2 import sql
@@ -111,7 +123,7 @@ class PostgreSQLOfflineStore(OfflineStore):
                 feature_refs, feature_views, registry, project,
             )
 
-            query = offline_utils.build_point_in_time_query(
+            query = build_point_in_time_query(
                 query_context,
                 left_table_query_string=table_name,
                 entity_df_event_timestamp_col=entity_df_event_timestamp_col,
@@ -216,8 +228,42 @@ class PostgreSQLRetrievalJob(RetrievalJob):
 
 
 def _append_alias(field_names: List[str], alias: str) -> List[str]:
-    return [f"{alias}.{field_name}" for field_name in field_names]
+    return [f"{alias}.\"{field_name}\"" for field_name in field_names]
 
+def build_point_in_time_query(
+    feature_view_query_contexts: List[offline_utils.FeatureViewQueryContext],
+    left_table_query_string: str,
+    entity_df_event_timestamp_col: str,
+    entity_df_columns: KeysView[str],
+    query_template: str,
+    full_feature_names: bool = False,
+) -> str:
+    """Build point-in-time query between each feature view table and the entity dataframe for Bigquery and Redshift"""
+    template = Environment(loader=BaseLoader()).from_string(source=query_template)
+
+    final_output_feature_names = list(entity_df_columns)
+    final_output_feature_names.extend(
+        [
+            (f"{fv.name}__{feature}" if full_feature_names else feature)
+            for fv in feature_view_query_contexts
+            for feature in fv.features
+        ]
+    )
+
+    # Add additional fields to dict
+    template_context = {
+        "left_table_query_string": left_table_query_string,
+        "entity_df_event_timestamp_col": entity_df_event_timestamp_col,
+        "unique_entity_keys": set(
+            [entity for fv in feature_view_query_contexts for entity in fv.entities]
+        ),
+        "featureviews": [asdict(context) for context in feature_view_query_contexts],
+        "full_feature_names": full_feature_names,
+        "final_output_feature_names": final_output_feature_names,
+    }
+
+    query = template.render(template_context)
+    return query
 
 # Copied from the Feast Redshift offline store implementation
 # Note: Keep this in sync with sdk/python/feast/infra/offline_stores/redshift.py:
@@ -284,7 +330,7 @@ WITH entity_dataframe AS (
         {{ featureview.created_timestamp_column ~ ' as created_timestamp,' if featureview.created_timestamp_column else '' }}
         {{ featureview.entity_selections | join(', ')}}{% if featureview.entity_selections %},{% else %}{% endif %}
         {% for feature in featureview.features %}
-            {{ feature }} as {% if full_feature_names %}{{ featureview.name }}__{{feature}}{% else %}{{ feature }}{% endif %}{% if loop.last %}{% else %}, {% endif %}
+            "{{ feature }}" as "{% if full_feature_names %}{{ featureview.name }}__{{feature}}{% else %}{{ feature }}{% endif %}"{% if loop.last %}{% else %}, {% endif %}
         {% endfor %}
     FROM {{ featureview.table_subquery }} AS sub
     WHERE {{ featureview.event_timestamp_column }} <= (SELECT MAX(entity_timestamp) FROM entity_dataframe)
@@ -378,14 +424,14 @@ WITH entity_dataframe AS (
  The entity_dataframe dataset being our source of truth here.
  */
 
-SELECT {{ final_output_feature_names | join(', ')}}
+SELECT "{{ final_output_feature_names | join('", "')}}"
 FROM entity_dataframe
 {% for featureview in featureviews %}
 LEFT JOIN (
     SELECT
-        {{featureview.name}}__entity_row_unique_id
+        "{{featureview.name}}__entity_row_unique_id"
         {% for feature in featureview.features %}
-            ,{% if full_feature_names %}{{ featureview.name }}__{{feature}}{% else %}{{ feature }}{% endif %}
+            ,"{% if full_feature_names %}{{ featureview.name }}__{{feature}}{% else %}{{ feature }}{% endif %}"
         {% endfor %}
     FROM {{ featureview.name }}__cleaned
 ) AS "{{featureview.name}}" USING ({{featureview.name}}__entity_row_unique_id)
