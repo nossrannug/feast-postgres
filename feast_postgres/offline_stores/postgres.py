@@ -28,7 +28,7 @@ from feast.on_demand_feature_view import OnDemandFeatureView
 from feast.registry import Registry
 from feast.repo_config import RepoConfig
 from feast_postgres.type_map import pg_type_code_to_arrow
-from feast_postgres.utils import _get_conn, df_to_postgres_table, sql_to_postgres_table
+from feast_postgres.utils import _get_conn, df_to_postgres_table, get_query_schema
 
 from ..postgres_config import PostgreSQLConfig
 from .postgres_source import PostgreSQLSource
@@ -104,8 +104,16 @@ class PostgreSQLOfflineStore(OfflineStore):
     ) -> RetrievalJob:
         @contextlib.contextmanager
         def query_generator() -> Iterator[str]:
-            table_name = offline_utils.get_temp_entity_table_name()
-            entity_schema = _df_to_table(config.offline_store, entity_df, table_name)
+            table_name = None
+            if isinstance(entity_df, pd.DataFrame):
+                table_name = offline_utils.get_temp_entity_table_name()
+                entity_schema = df_to_postgres_table(config.offline_store, entity_df, table_name)
+                df_query = table_name
+            elif isinstance(entity_df, str):
+                df_query = f"({entity_df}) AS sub"
+                entity_schema = get_query_schema(config.offline_store, df_query)
+            else:
+                raise TypeError(entity_df)
 
             entity_df_event_timestamp_col = offline_utils.infer_event_timestamp_from_entity_df(
                 entity_schema
@@ -123,26 +131,25 @@ class PostgreSQLOfflineStore(OfflineStore):
                 feature_refs, feature_views, registry, project,
             )
 
-            query = build_point_in_time_query(
-                query_context,
-                left_table_query_string=table_name,
-                entity_df_event_timestamp_col=entity_df_event_timestamp_col,
-                entity_df_columns=entity_schema.keys(),
-                query_template=MULTIPLE_FEATURE_VIEW_POINT_IN_TIME_JOIN,
-                full_feature_names=full_feature_names,
-            )
-
             try:
-                yield query
+                yield build_point_in_time_query(
+                    query_context,
+                    left_table_query_string=df_query,
+                    entity_df_event_timestamp_col=entity_df_event_timestamp_col,
+                    entity_df_columns=entity_schema.keys(),
+                    query_template=MULTIPLE_FEATURE_VIEW_POINT_IN_TIME_JOIN,
+                    full_feature_names=full_feature_names,
+                )
             finally:
-                with _get_conn(config.offline_store) as conn, conn.cursor() as cur:
-                    cur.execute(
-                        sql.SQL(
-                            """
-                            DROP TABLE IF EXISTS {};
-                            """
-                        ).format(sql.Identifier(table_name)),
-                    )
+                if table_name:
+                    with _get_conn(config.offline_store) as conn, conn.cursor() as cur:
+                        cur.execute(
+                            sql.SQL(
+                                """
+                                DROP TABLE IF EXISTS {};
+                                """
+                            ).format(sql.Identifier(table_name)),
+                        )
 
         return PostgreSQLRetrievalJob(
             query=query_generator,
@@ -152,17 +159,6 @@ class PostgreSQLOfflineStore(OfflineStore):
                 feature_refs, project, registry
             ),
         )
-
-
-def _df_to_table(
-    config: PostgreSQLConfig, entity_df: Union[pd.DataFrame, str], table_name: str
-) -> Dict[str, str]:
-    if isinstance(entity_df, pd.DataFrame):
-        return df_to_postgres_table(config, entity_df, table_name)
-    elif isinstance(entity_df, str):
-        return sql_to_postgres_table(config, entity_df, table_name)
-    else:
-        raise TypeError(entity_df)
 
 
 class PostgreSQLRetrievalJob(RetrievalJob):
@@ -184,7 +180,6 @@ class PostgreSQLRetrievalJob(RetrievalJob):
 
             self._query_generator = query_generator
         self.config = config
-        self.connection = _get_conn(self.config.offline_store)
         self._full_feature_names = full_feature_names
         self._on_demand_feature_views = on_demand_feature_views
 
@@ -206,7 +201,8 @@ class PostgreSQLRetrievalJob(RetrievalJob):
 
     def _to_arrow_internal(self) -> pa.Table:
         with self._query_generator() as query:
-            with self.connection as conn, conn.cursor() as cur:
+            with _get_conn(self.config.offline_store) as conn, conn.cursor() as cur:
+                conn.set_session(readonly=True)
                 cur.execute(query)
                 fields = [
                     (c.name, pg_type_code_to_arrow(c.type_code))

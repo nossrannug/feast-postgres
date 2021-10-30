@@ -3,7 +3,6 @@ from typing import Dict
 import pandas as pd
 import psycopg2
 import pyarrow as pa
-from psycopg2 import sql
 
 from feast_postgres.postgres_config import PostgreSQLConfig
 from feast_postgres.type_map import arrow_to_pg_type
@@ -51,22 +50,17 @@ def df_to_postgres_table(
             """,
             df.to_numpy(),
         )
-        return df
+        return dict(zip(df.columns, df.dtypes))
 
 
-def sql_to_postgres_table(
-    config: PostgreSQLConfig, sql_query: str, table_name: str
+def get_query_schema(
+    config: PostgreSQLConfig, sql_query: str
 ) -> Dict[str, str]:
     """
-    Create a table for the sql statement and return the table schema
+    We'll use the statement when we perform the query rather than copying data to a
+    new table
     """
-    with _get_conn(config) as conn, conn.cursor() as cur:
-        cur.execute(
-            sql.SQL(
-                """
-                CREATE TABLE {} AS ({});
-                """
-            ).format(sql.Identifier(table_name), sql.Literal(sql_query),),
-        )
-        df = pd.read_sql(f"SELECT * FROM {table_name} LIMIT 1", conn,)
+    with _get_conn(config) as conn:
+        conn.set_session(readonly=True)
+        df = pd.read_sql(f"SELECT * FROM {sql_query} LIMIT 0", conn,)
         return dict(zip(df.columns, df.dtypes))
