@@ -166,15 +166,13 @@ class PostgreSQLOnlineStore(OnlineStore):
             cur.execute(create_schema_sql)
 
             for table in tables_to_delete:
+                table_name = _table_id(project, table)
                 cur.execute(
-                    sql.SQL(
-                        """
-                        DROP TABLE IF EXISTS {};
-                        """
-                    ).format(sql.Identifier(_table_id(project, table)),)
+                    _drop_table_and_index(table_name)
                 )
 
             for table in tables_to_keep:
+                table_name = _table_id(project, table)
                 cur.execute(
                     sql.SQL(
                         """
@@ -187,18 +185,12 @@ class PostgreSQLOnlineStore(OnlineStore):
                             created_ts TIMESTAMPTZ,
                             PRIMARY KEY(entity_key, feature_name)
                         );
-                        """
-                    ).format(sql.Identifier(_table_id(project, table)),)
-                )
-                cur.execute(
-                    sql.SQL(
-                        """
-                        CREATE INDEX IF NOT EXISTS {}
-                        ON {} (entity_key);
+                        CREATE INDEX IF NOT EXISTS {} ON {} (entity_key);
                         """
                     ).format(
-                        sql.Identifier(f"{_table_id(project, table)}_ek"),
-                        sql.Identifier(_table_id(project, table)),
+                        sql.Identifier(table_name),
+                        sql.Identifier(f"{table_name}_ek"),
+                        sql.Identifier(table_name),
                     )
                 )
 
@@ -210,20 +202,14 @@ class PostgreSQLOnlineStore(OnlineStore):
         tables: Sequence[Union[FeatureTable, FeatureView]],
         entities: Sequence[Entity],
     ):
-        schema_name = (
-            config.online_store.db_schema
-            if config.online_store.db_schema
-            else config.online_store.user
-        )
+        project = config.project
         try:
             with self._get_conn(config) as conn, conn.cursor() as cur:
-                cur.execute(
-                    sql.SQL(
-                        """
-                        DROP SCHEMA IF EXISTS {} CASCADE;
-                        """
-                    ).format(sql.Identifier(schema_name))
-                )
+                for table in tables:
+                    table_name = _table_id(project, table)
+                    cur.execute(
+                        _drop_table_and_index(table_name)
+                    )
         except Exception:
             logging.exception("Teardown failed")
             raise
@@ -232,6 +218,16 @@ class PostgreSQLOnlineStore(OnlineStore):
 def _table_id(project: str, table: Union[FeatureTable, FeatureView]) -> str:
     return f"{project}_{table.name}"
 
+def _drop_table_and_index(table_name):
+    return sql.SQL(
+        """
+        DROP TABLE IF EXISTS {};
+        DROP INDEX IF EXISTS {};
+        """
+    ).format(
+        sql.Identifier(table_name),
+        sql.Identifier(f"{table_name}_ek"),
+    )
 
 def _to_naive_utc(ts: datetime):
     if ts.tzinfo is None:
