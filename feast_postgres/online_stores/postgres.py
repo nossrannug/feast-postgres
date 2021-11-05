@@ -167,9 +167,7 @@ class PostgreSQLOnlineStore(OnlineStore):
 
             for table in tables_to_delete:
                 table_name = _table_id(project, table)
-                cur.execute(
-                    _drop_table_and_index(table_name)
-                )
+                cur.execute(_drop_table_and_index(table_name))
 
             for table in tables_to_keep:
                 table_name = _table_id(project, table)
@@ -207,9 +205,7 @@ class PostgreSQLOnlineStore(OnlineStore):
             with self._get_conn(config) as conn, conn.cursor() as cur:
                 for table in tables:
                     table_name = _table_id(project, table)
-                    cur.execute(
-                        _drop_table_and_index(table_name)
-                    )
+                    cur.execute(_drop_table_and_index(table_name))
         except Exception:
             logging.exception("Teardown failed")
             raise
@@ -218,16 +214,15 @@ class PostgreSQLOnlineStore(OnlineStore):
 def _table_id(project: str, table: Union[FeatureTable, FeatureView]) -> str:
     return f"{project}_{table.name}"
 
+
 def _drop_table_and_index(table_name):
     return sql.SQL(
         """
         DROP TABLE IF EXISTS {};
         DROP INDEX IF EXISTS {};
         """
-    ).format(
-        sql.Identifier(table_name),
-        sql.Identifier(f"{table_name}_ek"),
-    )
+    ).format(sql.Identifier(table_name), sql.Identifier(f"{table_name}_ek"),)
+
 
 def _to_naive_utc(ts: datetime):
     if ts.tzinfo is None:

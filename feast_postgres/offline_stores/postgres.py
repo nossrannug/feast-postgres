@@ -5,17 +5,16 @@ from typing import (
     Any,
     Callable,
     ContextManager,
-    Dict,
-    KeysView,
     Iterator,
+    KeysView,
     List,
     Optional,
     Union,
 )
 
-from jinja2 import BaseLoader, Environment
 import pandas as pd
 import pyarrow as pa
+from jinja2 import BaseLoader, Environment
 from psycopg2 import sql
 from pydantic import StrictStr
 from pydantic.typing import Literal
@@ -107,7 +106,9 @@ class PostgreSQLOfflineStore(OfflineStore):
             table_name = None
             if isinstance(entity_df, pd.DataFrame):
                 table_name = offline_utils.get_temp_entity_table_name()
-                entity_schema = df_to_postgres_table(config.offline_store, entity_df, table_name)
+                entity_schema = df_to_postgres_table(
+                    config.offline_store, entity_df, table_name
+                )
                 df_query = table_name
             elif isinstance(entity_df, str):
                 df_query = f"({entity_df}) AS sub"
@@ -224,7 +225,8 @@ class PostgreSQLRetrievalJob(RetrievalJob):
 
 
 def _append_alias(field_names: List[str], alias: str) -> List[str]:
-    return [f"{alias}.\"{field_name}\"" for field_name in field_names]
+    return [f'{alias}."{field_name}"' for field_name in field_names]
+
 
 def build_point_in_time_query(
     feature_view_query_contexts: List[offline_utils.FeatureViewQueryContext],
@@ -260,6 +262,7 @@ def build_point_in_time_query(
 
     query = template.render(template_context)
     return query
+
 
 # Copied from the Feast Redshift offline store implementation
 # Note: Keep this in sync with sdk/python/feast/infra/offline_stores/redshift.py:

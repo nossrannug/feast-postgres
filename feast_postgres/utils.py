@@ -53,9 +53,7 @@ def df_to_postgres_table(
         return dict(zip(df.columns, df.dtypes))
 
 
-def get_query_schema(
-    config: PostgreSQLConfig, sql_query: str
-) -> Dict[str, str]:
+def get_query_schema(config: PostgreSQLConfig, sql_query: str) -> Dict[str, str]:
     """
     We'll use the statement when we perform the query rather than copying data to a
     new table
