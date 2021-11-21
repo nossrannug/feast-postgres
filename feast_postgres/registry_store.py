@@ -75,13 +75,11 @@ class PostgreSQLRegistryStore(RegistryStore):
             )
 
     def teardown(self):
-        # with _get_conn(self.db_config) as conn, conn.cursor() as cur:
-        #     cur.execute(
-        #         sql.SQL(
-        #             """
-        #             DROP TABLE IF EXISTS {};
-        #             """
-        #         ).format(sql.Identifier(self.table_name))
-        #     )
-        # Drop the table or keep it to have the history?
-        pass
+        with _get_conn(self.db_config) as conn, conn.cursor() as cur:
+            cur.execute(
+                sql.SQL(
+                    """
+                    DROP TABLE IF EXISTS {};
+                    """
+                ).format(sql.Identifier(self.table_name))
+            )

@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as f:
     readme = f.read()
 
 INSTALL_REQUIRE = [
-    "feast>=0.13.0",
+    "feast>=0.15.0",
     "psycopg2-binary>=2.8.3",
     "pyarrow>=2.0.0",
 ]
@@ -22,10 +22,10 @@ DEV_REQUIRE = [
 
 setup(
     name="feast-postgres",
-    version="0.1.6",
+    version="0.2.0",
     author="Gunnar Sv Sigurbjörnsson",
     author_email="gunnar.sigurbjornsson@gmail.com",
-    description="PostgreSQL online and offline store for Feast",
+    description="PostgreSQL registry, and online and offline store for Feast",
     long_description=readme,
     long_description_content_type="text/markdown",
     python_requires=">=3.7.0",
