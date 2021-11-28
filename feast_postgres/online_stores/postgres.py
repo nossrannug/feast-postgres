@@ -149,21 +149,29 @@ class PostgreSQLOnlineStore(OnlineStore):
         partial: bool,
     ):
         project = config.project
+        schema_name = config.online_store.db_schema or config.online_store.user
         with self._get_conn(config) as conn, conn.cursor() as cur:
             # If a db_schema is provided, then that schema gets created if it doesn't
             # exist. Else a schema is created for the feature store user.
-            if config.online_store.db_schema:
-                create_schema_sql = sql.SQL(
-                    "CREATE SCHEMA IF NOT EXISTS {} AUTHORIZATION {}"
-                ).format(
-                    sql.Identifier(config.online_store.db_schema),
-                    sql.Identifier(config.online_store.user),
+            
+            cur.execute(
+                """
+                SELECT schema_name
+                FROM information_schema.schemata
+                WHERE schema_name = %s
+                """,
+                (schema_name,),
+            )
+            schema_exists = cur.fetchone()
+            if not schema_exists:
+                cur.execute(
+                    sql.SQL(
+                        "CREATE SCHEMA IF NOT EXISTS {} AUTHORIZATION {}"
+                    ).format(
+                        sql.Identifier(schema_name),
+                        sql.Identifier(config.online_store.user),
+                    ),
                 )
-            else:
-                create_schema_sql = sql.SQL(
-                    "CREATE SCHEMA IF NOT EXISTS AUTHORIZATION {}"
-                ).format(sql.Identifier(config.online_store.user),)
-            cur.execute(create_schema_sql)
 
             for table in tables_to_delete:
                 table_name = _table_id(project, table)

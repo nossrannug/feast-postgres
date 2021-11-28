@@ -37,7 +37,7 @@ offline_store:
     ...
 ```
 
-When running `feast apply`, if `db_schema` is set then that value will be used when creating the schema, else the name of the schema will be the value in `user`. If the schema already exists then no schema is created, but the user must have privileges to create tables and indexes as well as dropping tables.
+When running `feast apply`, if `db_schema` is set then that value will be used when creating the schema, else the name of the schema will be the value in `user`. If the schema already exists then no schema is created, but the user must have privileges to create tables and indexes as well as dropping tables and indexes.
 
 ### Offline store:
 To configure the offline store edit `feature_store.yaml`
@@ -72,6 +72,8 @@ registry:
     user: username
     password: password
 ```
+
+If the schema does not exists, the user will need to have privileges to create it. If the schema exists, the user will only need privileges to create the table.
 
 ### Example
 Start by setting the values in `feature_store.yaml`. Then use `copy_from_parquet_to_postgres.py` to create a table and populate it with data from the parquet file that comes with Feast.

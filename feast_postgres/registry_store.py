@@ -52,7 +52,27 @@ class PostgreSQLRegistryStore(RegistryStore):
         Args:
             registry_proto: the new RegistryProto
         """
+        schema_name = self.db_config.db_schema or self.db_config.user
         with _get_conn(self.db_config) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT schema_name
+                FROM information_schema.schemata
+                WHERE schema_name = %s
+                """,
+                (schema_name,),
+            )
+            schema_exists = cur.fetchone()
+            if not schema_exists:
+                cur.execute(
+                    sql.SQL(
+                        "CREATE SCHEMA IF NOT EXISTS {} AUTHORIZATION {}"
+                    ).format(
+                        sql.Identifier(schema_name),
+                        sql.Identifier(self.db_config.user),
+                    ),
+                )
+            
             cur.execute(
                 sql.SQL(
                     """
