@@ -65,14 +65,12 @@ class PostgreSQLRegistryStore(RegistryStore):
             schema_exists = cur.fetchone()
             if not schema_exists:
                 cur.execute(
-                    sql.SQL(
-                        "CREATE SCHEMA IF NOT EXISTS {} AUTHORIZATION {}"
-                    ).format(
+                    sql.SQL("CREATE SCHEMA IF NOT EXISTS {} AUTHORIZATION {}").format(
                         sql.Identifier(schema_name),
                         sql.Identifier(self.db_config.user),
                     ),
                 )
-            
+
             cur.execute(
                 sql.SQL(
                     """

@@ -15,9 +15,7 @@ def _get_conn(config: PostgreSQLConfig):
         port=int(config.port),
         user=config.user,
         password=config.password,
-        options="-c search_path={}".format(
-            config.db_schema or config.user
-        ),
+        options="-c search_path={}".format(config.db_schema or config.user),
     )
     return conn
 

@@ -153,7 +153,7 @@ class PostgreSQLOnlineStore(OnlineStore):
         with self._get_conn(config) as conn, conn.cursor() as cur:
             # If a db_schema is provided, then that schema gets created if it doesn't
             # exist. Else a schema is created for the feature store user.
-            
+
             cur.execute(
                 """
                 SELECT schema_name
@@ -165,9 +165,7 @@ class PostgreSQLOnlineStore(OnlineStore):
             schema_exists = cur.fetchone()
             if not schema_exists:
                 cur.execute(
-                    sql.SQL(
-                        "CREATE SCHEMA IF NOT EXISTS {} AUTHORIZATION {}"
-                    ).format(
+                    sql.SQL("CREATE SCHEMA IF NOT EXISTS {} AUTHORIZATION {}").format(
                         sql.Identifier(schema_name),
                         sql.Identifier(config.online_store.user),
                     ),
