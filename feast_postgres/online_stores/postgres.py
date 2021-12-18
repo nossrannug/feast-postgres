@@ -9,7 +9,7 @@ from psycopg2 import sql
 from psycopg2.extras import execute_values
 from pydantic.schema import Literal
 
-from feast import Entity, FeatureTable
+from feast import Entity
 from feast.feature_view import FeatureView
 from feast.infra.key_encoding_utils import serialize_entity_key
 from feast.infra.online_stores.online_store import OnlineStore
@@ -39,7 +39,7 @@ class PostgreSQLOnlineStore(OnlineStore):
     def online_write_batch(
         self,
         config: RepoConfig,
-        table: Union[FeatureTable, FeatureView],
+        table: FeatureView,
         data: List[
             Tuple[EntityKeyProto, Dict[str, ValueProto], datetime, Optional[datetime]]
         ],
@@ -92,7 +92,7 @@ class PostgreSQLOnlineStore(OnlineStore):
     def online_read(
         self,
         config: RepoConfig,
-        table: Union[FeatureTable, FeatureView],
+        table: FeatureView,
         entity_keys: List[EntityKeyProto],
         requested_features: Optional[List[str]] = None,
     ) -> List[Tuple[Optional[datetime], Optional[Dict[str, ValueProto]]]]:
@@ -142,8 +142,8 @@ class PostgreSQLOnlineStore(OnlineStore):
     def update(
         self,
         config: RepoConfig,
-        tables_to_delete: Sequence[Union[FeatureTable, FeatureView]],
-        tables_to_keep: Sequence[Union[FeatureTable, FeatureView]],
+        tables_to_delete: Sequence[FeatureView],
+        tables_to_keep: Sequence[FeatureView],
         entities_to_delete: Sequence[Entity],
         entities_to_keep: Sequence[Entity],
         partial: bool,
@@ -203,7 +203,7 @@ class PostgreSQLOnlineStore(OnlineStore):
     def teardown(
         self,
         config: RepoConfig,
-        tables: Sequence[Union[FeatureTable, FeatureView]],
+        tables: Sequence[FeatureView],
         entities: Sequence[Entity],
     ):
         project = config.project
@@ -217,7 +217,7 @@ class PostgreSQLOnlineStore(OnlineStore):
             raise
 
 
-def _table_id(project: str, table: Union[FeatureTable, FeatureView]) -> str:
+def _table_id(project: str, table: FeatureView) -> str:
     return f"{project}_{table.name}"
 
 
