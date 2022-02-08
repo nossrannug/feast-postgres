@@ -18,6 +18,7 @@ DEV_REQUIRE = [
     "mypy==0.790",
     "build==0.7.0",
     "twine==3.4.2",
+    "pytest>=6.0.0",
 ]
 
 setup(
@@ -45,5 +46,8 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
     ],
 )
