@@ -4,13 +4,16 @@ on: [push, pull_request]
 
 jobs:
   feast-universal-tests:
-    runs-on: [ubuntu-latest]
+    needs: lint
+
+    runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
-      matrix: # we can decide to expand or reduce these versions; add testing for win/macos; test against psycopg2/3 and other dependencies
-        python-version: ["3.7", "3.8", "3.9"]
+      matrix: # we can decide to expand or reduce these versions; add testing for mac/windows; test against psycopg2/3 and other dependencies
+        python-version: ["3.7", "3.8", "3.9", "3.10"]
         postgres-version: [11, 12, 13, 14]
+        os: ["ubuntu-latest"]
 
     services:
       postgres:
@@ -49,7 +52,6 @@ jobs:
 
       - name: Run feast universal tests
         run: |
-          pwd
           make test-python-universal
           
 
