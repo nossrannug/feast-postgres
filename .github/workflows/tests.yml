@@ -4,8 +4,6 @@ on: [push, pull_request]
 
 jobs:
   feast-universal-tests:
-    needs: lint
-
     runs-on: ${{ matrix.os }}
 
     strategy:

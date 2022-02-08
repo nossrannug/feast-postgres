@@ -13,7 +13,7 @@ INSTALL_REQUIRE = [
 
 DEV_REQUIRE = [
     "flake8",
-    "black==19.10b0",
+    "black==21.10b0",
     "isort>=5",
     "mypy==0.790",
     "build==0.7.0",
