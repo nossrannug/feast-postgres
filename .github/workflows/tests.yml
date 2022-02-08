@@ -9,14 +9,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix: # we can decide to expand or reduce these versions; add testing for win/macos; test against psycopg2/3 and other dependencies
-        python-version: ["3.7", "3.8", "3.9", "3.10"]
+        python-version: ["3.7", "3.8", "3.9"]
         postgres-version: [11, 12, 13, 14]
 
     services:
       postgres:
         image: postgres:${{ matrix.postgres-version }}
         env:
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: docker
+        ports:
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -46,12 +48,8 @@ jobs:
           make install-python-ci-dependencies
 
       - name: Run feast universal tests
-        env:
-          FEAST_USAGE: False
-          IS_TEST: True
-          FULL_REPO_CONFIGS_MODULE: tests.repo_config
         run: |
-          # make test-python-universal # see note in Makefile
-          python -m pytest -n 8 --integration --universal sdk/python/tests
+          pwd
+          make test-python-universal
           
 
