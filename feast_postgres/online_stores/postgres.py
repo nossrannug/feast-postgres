@@ -1,7 +1,7 @@
 import logging
 from collections import defaultdict
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import psycopg2
 import pytz
@@ -112,7 +112,9 @@ class PostgreSQLOnlineStore(OnlineStore):
                     SELECT entity_key, feature_name, value, event_ts
                     FROM {} WHERE entity_key = ANY(%s);
                     """
-                ).format(sql.Identifier(_table_id(project, table)),),
+                ).format(
+                    sql.Identifier(_table_id(project, table)),
+                ),
                 (keys,),
             )
 
@@ -227,7 +229,10 @@ def _drop_table_and_index(table_name):
         DROP TABLE IF EXISTS {};
         DROP INDEX IF EXISTS {};
         """
-    ).format(sql.Identifier(table_name), sql.Identifier(f"{table_name}_ek"),)
+    ).format(
+        sql.Identifier(table_name),
+        sql.Identifier(f"{table_name}_ek"),
+    )
 
 
 def _to_naive_utc(ts: datetime):

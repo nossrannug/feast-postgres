@@ -1,0 +1,55 @@
+name: test
+
+on: [push, pull_request]
+
+jobs:
+  feast-universal-tests:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix: # we can decide to expand or reduce these versions; add testing for mac/windows; test against psycopg2/3 and other dependencies
+        python-version: ["3.7", "3.8", "3.9"]
+        postgres-version: [11, 12, 13, 14]
+        os: ["ubuntu-latest"]
+
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres-version }}
+        env:
+          POSTGRES_PASSWORD: docker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        id: setup-python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "${{ matrix.python-version }}"
+          architecture: x64
+
+      - name: Install dependencies
+        run: |
+          pip install -U pip wheel pip-tools
+          pip install -e .
+
+      - name: Install feast dependencies
+        run: |
+          cd feast
+          make install-python-ci-dependencies
+
+      - name: Run feast universal tests
+        run: |
+          make test-python-universal
+          
+

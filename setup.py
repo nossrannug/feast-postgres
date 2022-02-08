@@ -13,11 +13,12 @@ INSTALL_REQUIRE = [
 
 DEV_REQUIRE = [
     "flake8",
-    "black==19.10b0",
+    "black==21.10b0",
     "isort>=5",
     "mypy==0.790",
     "build==0.7.0",
     "twine==3.4.2",
+    "pytest>=6.0.0",
 ]
 
 setup(
@@ -45,5 +46,7 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
 )

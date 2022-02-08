@@ -116,8 +116,8 @@ class PostgreSQLOfflineStore(OfflineStore):
             else:
                 raise TypeError(entity_df)
 
-            entity_df_event_timestamp_col = offline_utils.infer_event_timestamp_from_entity_df(
-                entity_schema
+            entity_df_event_timestamp_col = (
+                offline_utils.infer_event_timestamp_from_entity_df(entity_schema)
             )
 
             expected_join_keys = offline_utils.get_expected_join_keys(
@@ -129,7 +129,10 @@ class PostgreSQLOfflineStore(OfflineStore):
             )
 
             query_context = offline_utils.get_feature_view_query_context(
-                feature_refs, feature_views, registry, project,
+                feature_refs,
+                feature_views,
+                registry,
+                project,
             )
 
             query_context = [asdict(context) for context in query_context]
