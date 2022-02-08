@@ -95,7 +95,9 @@ class PostgreSQLOptions:
     @classmethod
     def from_proto(cls, postgres_options_proto: DataSourceProto.CustomSourceOptions):
         config = json.loads(postgres_options_proto.configuration.decode("utf8"))
-        postgres_options = cls(query=config["query"],)
+        postgres_options = cls(
+            query=config["query"],
+        )
 
         return postgres_options
 
