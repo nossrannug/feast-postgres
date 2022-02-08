@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: # we can decide to expand or reduce these versions; add testing for mac/windows; test against psycopg2/3 and other dependencies
-        python-version: ["3.7", "3.8", "3.9", "3.10"]
+        python-version: ["3.7", "3.8", "3.9"]
         postgres-version: [11, 12, 13, 14]
         os: ["ubuntu-latest"]
 

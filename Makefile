@@ -5,7 +5,7 @@ help: ## This help.
 
 format: ## Format all the code using isort and black
 	isort feast_postgres/
-	black --target-version py38 feast_postgres
+	black --target-version py37 feast_postgres
 
 lint: ## Run mypy, isort, flake8, and black
 	mypy feast_postgres/
