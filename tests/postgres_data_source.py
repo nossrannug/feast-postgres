@@ -57,6 +57,10 @@ class PostgreSQLDataSourceCreator(DataSourceCreator):
     def get_prefixed_table_name(self, suffix: str) -> str:
         return f"{self.project_name}_{suffix}"
 
+    def create_saved_dataset_destination(self):
+        # FIXME: ...
+        return None
+
     def teardown(self):
         pass
         with _get_conn(self.offline_store_config) as conn, conn.cursor() as cur:

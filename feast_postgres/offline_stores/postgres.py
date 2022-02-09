@@ -1,6 +1,7 @@
 import contextlib
 from dataclasses import asdict
 from datetime import datetime
+from dateutil import parser
 from typing import (
     Any,
     Callable,
@@ -9,8 +10,10 @@ from typing import (
     KeysView,
     List,
     Optional,
+    Tuple,
     Union,
 )
+from feast.errors import InvalidEntityType
 
 import pandas as pd
 import pyarrow as pa
@@ -18,11 +21,12 @@ from jinja2 import BaseLoader, Environment
 from psycopg2 import sql
 from pydantic import StrictStr
 from pydantic.typing import Literal
+from pytz import utc
 
 from feast.data_source import DataSource
 from feast.feature_view import DUMMY_ENTITY_ID, DUMMY_ENTITY_VAL, FeatureView
 from feast.infra.offline_stores import offline_utils
-from feast.infra.offline_stores.offline_store import OfflineStore, RetrievalJob
+from feast.infra.offline_stores.offline_store import OfflineStore, RetrievalJob, RetrievalMetadata
 from feast.on_demand_feature_view import OnDemandFeatureView
 from feast.registry import Registry
 from feast.repo_config import RepoConfig
@@ -128,11 +132,15 @@ class PostgreSQLOfflineStore(OfflineStore):
                 entity_schema, expected_join_keys, entity_df_event_timestamp_col
             )
 
+            entity_df_event_timestamp_range = _get_entity_df_event_timestamp_range(
+                entity_df,
+                entity_df_event_timestamp_col,
+                config,
+                table_name,
+            )
+
             query_context = offline_utils.get_feature_view_query_context(
-                feature_refs,
-                feature_views,
-                registry,
-                project,
+                feature_refs, feature_views, registry, project, entity_df_event_timestamp_range,
             )
 
             query_context = [asdict(context) for context in query_context]
@@ -169,6 +177,38 @@ class PostgreSQLOfflineStore(OfflineStore):
             on_demand_feature_views=OnDemandFeatureView.get_requested_odfvs(
                 feature_refs, project, registry
             ),
+        )
+    
+    @staticmethod
+    def pull_all_from_table_or_query(
+        config: RepoConfig,
+        data_source: DataSource,
+        join_key_columns: List[str],
+        feature_name_columns: List[str],
+        event_timestamp_column: str,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> RetrievalJob:
+        assert isinstance(data_source, PostgreSQLSource)
+        from_expression = data_source.get_table_query_string()
+
+        field_string = ", ".join(
+            join_key_columns + feature_name_columns + [event_timestamp_column]
+        )
+
+        start_date = start_date.astimezone(tz=utc)
+        end_date = end_date.astimezone(tz=utc)
+
+        query = f"""
+            SELECT {field_string}
+            FROM {from_expression}
+            WHERE "{event_timestamp_column}" BETWEEN '{start_date}'::timestamptz AND '{end_date}'::timestamptz
+        """
+
+        return PostgreSQLRetrievalJob(
+            query=query,
+            config=config,
+            full_feature_names=False,
         )
 
 
@@ -233,6 +273,46 @@ class PostgreSQLRetrievalJob(RetrievalJob):
                 )
                 return table
 
+    @property
+    def metadata(self) -> Optional[RetrievalMetadata]:
+        return self._metadata
+
+    def persist(self, storage: SavedDatasetStorage):
+        assert isinstance(storage, SavedDatasetRedshiftStorage)
+        self.to_redshift(table_name=storage.redshift_options.table)
+
+def _get_entity_df_event_timestamp_range(
+    entity_df: Union[pd.DataFrame, str],
+    entity_df_event_timestamp_col: str,
+    config: RepoConfig,
+    table_name: str,
+) -> Tuple[datetime, datetime]:
+    if isinstance(entity_df, pd.DataFrame):
+        entity_df_event_timestamp = entity_df.loc[
+            :, entity_df_event_timestamp_col
+        ].infer_objects()
+        if pd.api.types.is_string_dtype(entity_df_event_timestamp):
+            entity_df_event_timestamp = pd.to_datetime(
+                entity_df_event_timestamp, utc=True
+            )
+        entity_df_event_timestamp_range = (
+            entity_df_event_timestamp.min(),
+            entity_df_event_timestamp.max(),
+        )
+    elif isinstance(entity_df, str):
+        # If the entity_df is a string (SQL query), determine range
+        # from table
+        with _get_conn(config.offline_store) as conn, conn.cursor() as cur:
+            cur.execute(f"SELECT MIN({entity_df_event_timestamp_col}) AS min, MAX({entity_df_event_timestamp_col}) AS max FROM {table_name}"),
+            res = cur.fetchone()
+        entity_df_event_timestamp_range = (
+            parser.parse(res[0]),
+            parser.parse(res[1]),
+        )
+    else:
+        raise InvalidEntityType(type(entity_df))
+
+    return entity_df_event_timestamp_range
 
 def _append_alias(field_names: List[str], alias: str) -> List[str]:
     return [f'{alias}."{field_name}"' for field_name in field_names]
