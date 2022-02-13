@@ -14,6 +14,7 @@ from typing import (
     Union,
 )
 from feast.errors import InvalidEntityType
+from feast.saved_dataset import SavedDatasetStorage
 
 import pandas as pd
 import pyarrow as pa
@@ -160,15 +161,16 @@ class PostgreSQLOfflineStore(OfflineStore):
                     full_feature_names=full_feature_names,
                 )
             finally:
-                if table_name:
-                    with _get_conn(config.offline_store) as conn, conn.cursor() as cur:
-                        cur.execute(
-                            sql.SQL(
-                                """
-                                DROP TABLE IF EXISTS {};
-                                """
-                            ).format(sql.Identifier(table_name)),
-                        )
+                # if table_name:
+                #     with _get_conn(config.offline_store) as conn, conn.cursor() as cur:
+                #         cur.execute(
+                #             sql.SQL(
+                #                 """
+                #                 DROP TABLE IF EXISTS {};
+                #                 """
+                #             ).format(sql.Identifier(table_name)),
+                #         )
+                pass
 
         return PostgreSQLRetrievalJob(
             query=query_generator,
@@ -275,11 +277,13 @@ class PostgreSQLRetrievalJob(RetrievalJob):
 
     @property
     def metadata(self) -> Optional[RetrievalMetadata]:
-        return self._metadata
+        return None
 
     def persist(self, storage: SavedDatasetStorage):
-        assert isinstance(storage, SavedDatasetRedshiftStorage)
-        self.to_redshift(table_name=storage.redshift_options.table)
+        raise NotImplementedError(
+            "feast-postgres does not support persisting historical dataframes"
+        )
+
 
 def _get_entity_df_event_timestamp_range(
     entity_df: Union[pd.DataFrame, str],

@@ -50,4 +50,4 @@ clean_reinstall_pip_packages:
 #   far as it's concerned, the object doesn't exist.
 # 
 test-python-universal:
-	cd feast && FULL_REPO_CONFIGS_MODULE=tests.repo_config FEAST_USAGE=False IS_TEST=True python -m pytest --integration --universal sdk/python/tests
+	cd feast && FULL_REPO_CONFIGS_MODULE=postgres_tests.repo_config FEAST_USAGE=False IS_TEST=True python -m pytest --integration --universal -m "not breaking" -k "test_online_store_cleanup" sdk/python/tests

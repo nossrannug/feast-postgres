@@ -1,5 +1,5 @@
 from tests.integration.feature_repos.integration_test_repo_config import IntegrationTestRepoConfig
-from tests.postgres_data_source import PostgreSQLDataSourceCreator
+from postgres_tests.postgres_data_source import PostgreSQLDataSourceCreator
 
 POSTGRES_ONLINE_CONFIG={
     "type": "feast_postgres.PostgreSQLOnlineStore",
