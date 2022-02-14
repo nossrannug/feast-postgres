@@ -48,7 +48,7 @@ class PostgreSQLDataSourceCreator(DataSourceCreator):
             query=f"SELECT * FROM {destination_name}",
             event_timestamp_column=event_timestamp_column,
             created_timestamp_column=created_timestamp_column,
-            field_mapping=field_mapping,
+            field_mapping=field_mapping or {"ts_1": "ts"},
         )
 
     def create_offline_store_config(self) -> FeastConfigBaseModel:

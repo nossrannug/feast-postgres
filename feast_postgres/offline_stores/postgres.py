@@ -336,7 +336,11 @@ def build_point_in_time_query(
     final_output_feature_names = list(entity_df_columns)
     final_output_feature_names.extend(
         [
-            (f'{fv["name"]}__{feature}' if full_feature_names else feature)
+            (
+                f'{fv["name"]}__{fv["field_mapping"].get(feature, feature)}'
+                if full_feature_names
+                else fv["field_mapping"].get(feature, feature)
+            )
             for fv in feature_view_query_contexts
             for feature in fv["features"]
         ]
@@ -423,7 +427,7 @@ WITH entity_dataframe AS (
         {{ '"' ~ featureview.created_timestamp_column ~ '" as created_timestamp,' if featureview.created_timestamp_column else '' }}
         {{ featureview.entity_selections | join(', ')}}{% if featureview.entity_selections %},{% else %}{% endif %}
         {% for feature in featureview.features %}
-            "{{ feature }}" as "{% if full_feature_names %}{{ featureview.name }}__{{feature}}{% else %}{{ feature }}{% endif %}"{% if loop.last %}{% else %}, {% endif %}
+            "{{ feature }}" as {% if full_feature_names %}"{{ featureview.name }}__{{featureview.field_mapping.get(feature, feature)}}"{% else %}"{{ featureview.field_mapping.get(feature, feature) }}"{% endif %}{% if loop.last %}{% else %}, {% endif %}
         {% endfor %}
     FROM {{ featureview.table_subquery }} AS sub
     WHERE "{{ featureview.event_timestamp_column }}" <= (SELECT MAX(entity_timestamp) FROM entity_dataframe)
@@ -524,7 +528,7 @@ LEFT JOIN (
     SELECT
         "{{featureview.name}}__entity_row_unique_id"
         {% for feature in featureview.features %}
-            ,"{% if full_feature_names %}{{ featureview.name }}__{{feature}}{% else %}{{ feature }}{% endif %}"
+            ,"{% if full_feature_names %}{{ featureview.name }}__{{featureview.field_mapping.get(feature, feature)}}{% else %}{{ featureview.field_mapping.get(feature, feature) }}{% endif %}"
         {% endfor %}
     FROM "{{ featureview.name }}__cleaned"
 ) AS "{{featureview.name}}" USING ("{{featureview.name}}__entity_row_unique_id")
