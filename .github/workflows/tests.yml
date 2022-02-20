@@ -46,7 +46,7 @@ jobs:
       - name: Install feast dependencies
         run: |
           cd feast
-          make install-python-ci-dependencies
+          PYTHON=${{ matrix.python-version }} make install-python-ci-dependencies
 
       - name: Run feast universal tests
         run: |
