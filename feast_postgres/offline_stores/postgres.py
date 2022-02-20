@@ -19,7 +19,6 @@ from feast.saved_dataset import SavedDatasetStorage
 import pandas as pd
 import pyarrow as pa
 from jinja2 import BaseLoader, Environment
-from psycopg2 import sql
 from pydantic import StrictStr
 from pydantic.typing import Literal
 from pytz import utc

@@ -49,5 +49,6 @@ clean_reinstall_pip_packages:
 #   other transactions. So CREATE SCHEMA / CREATE TABLE tries to create it because, as
 #   far as it's concerned, the object doesn't exist.
 # 
+# The test that persist the historical dataframe are skippted
 test-python-universal:
-	cd feast && FULL_REPO_CONFIGS_MODULE=postgres_tests.repo_config FEAST_USAGE=False IS_TEST=True python -m pytest --integration --universal -m "not breaking" -k "test_online_store_cleanup" sdk/python/tests
+	cd feast && FULL_REPO_CONFIGS_MODULE=postgres_tests.repo_config FEAST_USAGE=False IS_TEST=True python -m pytest --integration --universal -k "not test_historical_retrieval_fails_on_validation and not test_historical_retrieval_with_validation and not test_historical_features_persisting and not test_historical_retrieval_fails_on_validation" sdk/python/tests
