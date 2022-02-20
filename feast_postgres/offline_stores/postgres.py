@@ -19,6 +19,7 @@ from feast.saved_dataset import SavedDatasetStorage
 import pandas as pd
 import pyarrow as pa
 from jinja2 import BaseLoader, Environment
+from psycopg2 import sql
 from pydantic import StrictStr
 from pydantic.typing import Literal
 from pytz import utc
@@ -160,16 +161,15 @@ class PostgreSQLOfflineStore(OfflineStore):
                     full_feature_names=full_feature_names,
                 )
             finally:
-                # if table_name:
-                #     with _get_conn(config.offline_store) as conn, conn.cursor() as cur:
-                #         cur.execute(
-                #             sql.SQL(
-                #                 """
-                #                 DROP TABLE IF EXISTS {};
-                #                 """
-                #             ).format(sql.Identifier(table_name)),
-                #         )
-                pass
+                if table_name:
+                    with _get_conn(config.offline_store) as conn, conn.cursor() as cur:
+                        cur.execute(
+                            sql.SQL(
+                                """
+                                DROP TABLE IF EXISTS {};
+                                """
+                            ).format(sql.Identifier(table_name)),
+                        )
 
         return PostgreSQLRetrievalJob(
             query=query_generator,

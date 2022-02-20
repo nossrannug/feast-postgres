@@ -62,10 +62,9 @@ class PostgreSQLDataSourceCreator(DataSourceCreator):
         return None
 
     def teardown(self):
-        pass
-        # with _get_conn(self.offline_store_config) as conn, conn.cursor() as cur:
-        #     for table in self.tables:
-        #         cur.execute("DROP TABLE IF EXISTS " + table)
+        with _get_conn(self.offline_store_config) as conn, conn.cursor() as cur:
+            for table in self.tables:
+                cur.execute("DROP TABLE IF EXISTS " + table)
 
 
 
