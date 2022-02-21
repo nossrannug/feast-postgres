@@ -41,7 +41,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -U pip wheel pip-tools
-          pip install -e .
+          pip install -e .["dev"]
 
       - name: Install feast dependencies
         run: |
