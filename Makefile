@@ -32,7 +32,7 @@ stop-test-db:
 clean_reinstall_pip_packages:
 	pip freeze | sed -r 's/^-e.*egg=([^&]*).*/\1/' | xargs pip uninstall -y
 	pip install -U pip wheel pip-tools
-	cd feast && git checkout v0.18.0 && PYTHON=3.9 make install-python-ci-dependencies
+	cd feast && PYTHON=3.9 make install-python-ci-dependencies
 	pip install -e .["dev"]
 
 # Here we have to type out the whole command for the test rather than having
