@@ -137,7 +137,7 @@ class PostgreSQLOfflineStore(OfflineStore):
                 entity_df,
                 entity_df_event_timestamp_col,
                 config,
-                table_name,
+                df_query,
             )
 
             query_context = offline_utils.get_feature_view_query_context(
@@ -308,10 +308,7 @@ def _get_entity_df_event_timestamp_range(
         with _get_conn(config.offline_store) as conn, conn.cursor() as cur:
             cur.execute(f"SELECT MIN({entity_df_event_timestamp_col}) AS min, MAX({entity_df_event_timestamp_col}) AS max FROM {table_name}"),
             res = cur.fetchone()
-        entity_df_event_timestamp_range = (
-            parser.parse(res[0]),
-            parser.parse(res[1]),
-        )
+        entity_df_event_timestamp_range = (res[0],res[1])
     else:
         raise InvalidEntityType(type(entity_df))
 

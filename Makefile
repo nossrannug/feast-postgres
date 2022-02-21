@@ -51,4 +51,4 @@ clean_reinstall_pip_packages:
 # 
 # The test that persist the historical dataframe are skippted
 test-python-universal:
-	cd feast && FULL_REPO_CONFIGS_MODULE=postgres_tests.repo_config FEAST_USAGE=False IS_TEST=True python -m pytest --integration --universal -k "not test_historical_retrieval_fails_on_validation and not test_historical_retrieval_with_validation and not test_historical_features_persisting and not test_historical_retrieval_fails_on_validation" sdk/python/tests
+	cd feast && FULL_REPO_CONFIGS_MODULE=postgres_tests.repo_config FEAST_USAGE=False IS_TEST=True python -m pytest --integration --universal -k "not test_historical_retrieval_fails_on_validation and not test_historical_retrieval_with_validation and not test_historical_features_persisting and not test_historical_retrieval_fails_on_validation and not test_universal_cli" sdk/python/tests
