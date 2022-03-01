@@ -29,6 +29,12 @@ start-test-db:
 stop-test-db:
 	docker-compose down
 
+clean_reinstall_pip_packages:
+	pip freeze | sed -r 's/^-e.*egg=([^&]*).*/\1/' | xargs pip uninstall -y
+	pip install -U pip wheel pip-tools
+	cd feast && PYTHON=3.9 make install-python-ci-dependencies
+	pip install -e .["dev"]
+
 # Here we have to type out the whole command for the test rather than having
 # `cd feast && FULL_REPO_CONFIGS_MODULE=tests.repo_config make test-python-universal`
 # The reason is that feast runs the tests in parallel and doing so the update function
@@ -43,5 +49,6 @@ stop-test-db:
 #   other transactions. So CREATE SCHEMA / CREATE TABLE tries to create it because, as
 #   far as it's concerned, the object doesn't exist.
 # 
+# The test that persist the historical dataframe are skippted
 test-python-universal:
-	cd feast && FULL_REPO_CONFIGS_MODULE=tests.repo_config FEAST_USAGE=False IS_TEST=True python -m pytest --integration --universal sdk/python/tests
+	cd feast && FULL_REPO_CONFIGS_MODULE=postgres_tests.repo_config FEAST_USAGE=False IS_TEST=True python -m pytest --integration --universal -k "not test_historical_retrieval_fails_on_validation and not test_historical_retrieval_with_validation and not test_historical_features_persisting and not test_historical_retrieval_fails_on_validation and not test_universal_cli" sdk/python/tests

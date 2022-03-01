@@ -48,7 +48,7 @@ class PostgreSQLDataSourceCreator(DataSourceCreator):
             query=f"SELECT * FROM {destination_name}",
             event_timestamp_column=event_timestamp_column,
             created_timestamp_column=created_timestamp_column,
-            field_mapping=field_mapping,
+            field_mapping=field_mapping or {"ts_1": "ts"},
         )
 
     def create_offline_store_config(self) -> FeastConfigBaseModel:
@@ -57,8 +57,11 @@ class PostgreSQLDataSourceCreator(DataSourceCreator):
     def get_prefixed_table_name(self, suffix: str) -> str:
         return f"{self.project_name}_{suffix}"
 
+    def create_saved_dataset_destination(self):
+        # FIXME: ...
+        return None
+
     def teardown(self):
-        pass
         with _get_conn(self.offline_store_config) as conn, conn.cursor() as cur:
             for table in self.tables:
                 cur.execute("DROP TABLE IF EXISTS " + table)

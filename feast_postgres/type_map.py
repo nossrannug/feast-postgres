@@ -7,7 +7,7 @@ from feast import ValueType
 
 def arrow_to_pg_type(t_str: str) -> str:
     try:
-        if t_str.startswith("timestamp"):
+        if t_str.startswith("timestamp") or t_str.startswith("datetime"):
             return "timestamptz" if "tz=" in t_str else "timestamp"
         return {
             "null": "null",
@@ -20,6 +20,7 @@ def arrow_to_pg_type(t_str: str) -> str:
             "list<item: int64>": "bigint[]",
             "list<item: bool>": "boolean[]",
             "list<item: double>": "double precision[]",
+            "list<item: timestamp[us]>": "timestamp[]",
             "uint8": "smallint",
             "uint16": "int",
             "uint32": "bigint",
@@ -28,28 +29,6 @@ def arrow_to_pg_type(t_str: str) -> str:
             "double": "double precision",
             "binary": "binary",
             "string": "text",
-        }[t_str]
-    except KeyError:
-        raise ValueError(f"Unsupported type: {t_str}")
-
-
-def pg_type_to_arrow_type(t_str: str) -> str:
-    try:
-        if t_str.startswith("timestamp"):
-            return "timestamptz" if "tz=" in t_str else "timestamp"
-        return {
-            "null": "null",
-            "boolean": "bool",
-            "tinyint": "int8",
-            "smallint": "int16",
-            "int": "int32",
-            "bigint": "int64",
-            "bigint[]": "list<item: int64>",
-            "decimal": "double",
-            "float": "float",
-            "double": "double",
-            "binary": "binary",
-            "text": "string",
         }[t_str]
     except KeyError:
         raise ValueError(f"Unsupported type: {t_str}")

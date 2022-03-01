@@ -9,6 +9,7 @@ from typing import (
     KeysView,
     List,
     Optional,
+    Tuple,
     Union,
 )
 
@@ -18,14 +19,21 @@ from jinja2 import BaseLoader, Environment
 from psycopg2 import sql
 from pydantic import StrictStr
 from pydantic.typing import Literal
+from pytz import utc
 
 from feast.data_source import DataSource
+from feast.errors import InvalidEntityType
 from feast.feature_view import DUMMY_ENTITY_ID, DUMMY_ENTITY_VAL, FeatureView
 from feast.infra.offline_stores import offline_utils
-from feast.infra.offline_stores.offline_store import OfflineStore, RetrievalJob
+from feast.infra.offline_stores.offline_store import (
+    OfflineStore,
+    RetrievalJob,
+    RetrievalMetadata,
+)
 from feast.on_demand_feature_view import OnDemandFeatureView
 from feast.registry import Registry
 from feast.repo_config import RepoConfig
+from feast.saved_dataset import SavedDatasetStorage
 from feast_postgres.type_map import pg_type_code_to_arrow
 from feast_postgres.utils import _get_conn, df_to_postgres_table, get_query_schema
 
@@ -128,11 +136,19 @@ class PostgreSQLOfflineStore(OfflineStore):
                 entity_schema, expected_join_keys, entity_df_event_timestamp_col
             )
 
+            entity_df_event_timestamp_range = _get_entity_df_event_timestamp_range(
+                entity_df,
+                entity_df_event_timestamp_col,
+                config,
+                df_query,
+            )
+
             query_context = offline_utils.get_feature_view_query_context(
                 feature_refs,
                 feature_views,
                 registry,
                 project,
+                entity_df_event_timestamp_range,
             )
 
             query_context = [asdict(context) for context in query_context]
@@ -169,6 +185,39 @@ class PostgreSQLOfflineStore(OfflineStore):
             on_demand_feature_views=OnDemandFeatureView.get_requested_odfvs(
                 feature_refs, project, registry
             ),
+        )
+
+    @staticmethod
+    def pull_all_from_table_or_query(
+        config: RepoConfig,
+        data_source: DataSource,
+        join_key_columns: List[str],
+        feature_name_columns: List[str],
+        event_timestamp_column: str,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> RetrievalJob:
+        assert isinstance(data_source, PostgreSQLSource)
+        from_expression = data_source.get_table_query_string()
+
+        field_string = ", ".join(
+            join_key_columns + feature_name_columns + [event_timestamp_column]
+        )
+
+        start_date = start_date.astimezone(tz=utc)
+        end_date = end_date.astimezone(tz=utc)
+
+        query = f"""
+            SELECT {field_string}
+            FROM {from_expression}
+            WHERE "{event_timestamp_column}" BETWEEN '{start_date}'::timestamptz AND '{end_date}'::timestamptz
+        """
+
+        return PostgreSQLRetrievalJob(
+            query=query,
+            config=config,
+            full_feature_names=False,
+            on_demand_feature_views=None,
         )
 
 
@@ -233,6 +282,48 @@ class PostgreSQLRetrievalJob(RetrievalJob):
                 )
                 return table
 
+    @property
+    def metadata(self) -> Optional[RetrievalMetadata]:
+        return None
+
+    def persist(self, storage: SavedDatasetStorage):
+        raise NotImplementedError(
+            "feast-postgres does not support persisting historical dataframes"
+        )
+
+
+def _get_entity_df_event_timestamp_range(
+    entity_df: Union[pd.DataFrame, str],
+    entity_df_event_timestamp_col: str,
+    config: RepoConfig,
+    table_name: str,
+) -> Tuple[datetime, datetime]:
+    if isinstance(entity_df, pd.DataFrame):
+        entity_df_event_timestamp = entity_df.loc[
+            :, entity_df_event_timestamp_col
+        ].infer_objects()
+        if pd.api.types.is_string_dtype(entity_df_event_timestamp):
+            entity_df_event_timestamp = pd.to_datetime(
+                entity_df_event_timestamp, utc=True
+            )
+        entity_df_event_timestamp_range = (
+            entity_df_event_timestamp.min(),
+            entity_df_event_timestamp.max(),
+        )
+    elif isinstance(entity_df, str):
+        # If the entity_df is a string (SQL query), determine range
+        # from table
+        with _get_conn(config.offline_store) as conn, conn.cursor() as cur:
+            cur.execute(
+                f"SELECT MIN({entity_df_event_timestamp_col}) AS min, MAX({entity_df_event_timestamp_col}) AS max FROM {table_name}"
+            ),
+            res = cur.fetchone()
+        entity_df_event_timestamp_range = (res[0], res[1])
+    else:
+        raise InvalidEntityType(type(entity_df))
+
+    return entity_df_event_timestamp_range
+
 
 def _append_alias(field_names: List[str], alias: str) -> List[str]:
     return [f'{alias}."{field_name}"' for field_name in field_names]
@@ -252,7 +343,11 @@ def build_point_in_time_query(
     final_output_feature_names = list(entity_df_columns)
     final_output_feature_names.extend(
         [
-            (f'{fv["name"]}__{feature}' if full_feature_names else feature)
+            (
+                f'{fv["name"]}__{fv["field_mapping"].get(feature, feature)}'
+                if full_feature_names
+                else fv["field_mapping"].get(feature, feature)
+            )
             for fv in feature_view_query_contexts
             for feature in fv["features"]
         ]
@@ -339,7 +434,7 @@ WITH entity_dataframe AS (
         {{ '"' ~ featureview.created_timestamp_column ~ '" as created_timestamp,' if featureview.created_timestamp_column else '' }}
         {{ featureview.entity_selections | join(', ')}}{% if featureview.entity_selections %},{% else %}{% endif %}
         {% for feature in featureview.features %}
-            "{{ feature }}" as "{% if full_feature_names %}{{ featureview.name }}__{{feature}}{% else %}{{ feature }}{% endif %}"{% if loop.last %}{% else %}, {% endif %}
+            "{{ feature }}" as {% if full_feature_names %}"{{ featureview.name }}__{{featureview.field_mapping.get(feature, feature)}}"{% else %}"{{ featureview.field_mapping.get(feature, feature) }}"{% endif %}{% if loop.last %}{% else %}, {% endif %}
         {% endfor %}
     FROM {{ featureview.table_subquery }} AS sub
     WHERE "{{ featureview.event_timestamp_column }}" <= (SELECT MAX(entity_timestamp) FROM entity_dataframe)
@@ -440,7 +535,7 @@ LEFT JOIN (
     SELECT
         "{{featureview.name}}__entity_row_unique_id"
         {% for feature in featureview.features %}
-            ,"{% if full_feature_names %}{{ featureview.name }}__{{feature}}{% else %}{{ feature }}{% endif %}"
+            ,"{% if full_feature_names %}{{ featureview.name }}__{{featureview.field_mapping.get(feature, feature)}}{% else %}{{ featureview.field_mapping.get(feature, feature) }}{% endif %}"
         {% endfor %}
     FROM "{{ featureview.name }}__cleaned"
 ) AS "{{featureview.name}}" USING ("{{featureview.name}}__entity_row_unique_id")

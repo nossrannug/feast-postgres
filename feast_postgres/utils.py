@@ -1,5 +1,6 @@
 from typing import Dict
 
+import numpy as np
 import pandas as pd
 import psycopg2
 import pyarrow as pa
@@ -46,7 +47,7 @@ def df_to_postgres_table(
             INSERT INTO {table_name}
             VALUES %s
             """,
-            df.to_numpy(),
+            df.replace({np.NaN: None}).to_numpy(),
         )
         return dict(zip(df.columns, df.dtypes))
 

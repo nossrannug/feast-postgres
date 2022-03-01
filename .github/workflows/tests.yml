@@ -41,12 +41,10 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -U pip wheel pip-tools
-          pip install -e .
-
-      - name: Install feast dependencies
-        run: |
           cd feast
-          make install-python-ci-dependencies
+          PYTHON=${{ matrix.python-version }} make install-python-ci-dependencies
+          cd ..
+          pip install -e .["dev"]
 
       - name: Run feast universal tests
         run: |
