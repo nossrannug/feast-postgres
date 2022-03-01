@@ -1,6 +1,6 @@
 from typing import Dict
-import numpy as np
 
+import numpy as np
 import pandas as pd
 import psycopg2
 import pyarrow as pa

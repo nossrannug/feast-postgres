@@ -1,7 +1,6 @@
 import contextlib
 from dataclasses import asdict
 from datetime import datetime
-from dateutil import parser
 from typing import (
     Any,
     Callable,
@@ -13,8 +12,6 @@ from typing import (
     Tuple,
     Union,
 )
-from feast.errors import InvalidEntityType
-from feast.saved_dataset import SavedDatasetStorage
 
 import pandas as pd
 import pyarrow as pa
@@ -25,12 +22,18 @@ from pydantic.typing import Literal
 from pytz import utc
 
 from feast.data_source import DataSource
+from feast.errors import InvalidEntityType
 from feast.feature_view import DUMMY_ENTITY_ID, DUMMY_ENTITY_VAL, FeatureView
 from feast.infra.offline_stores import offline_utils
-from feast.infra.offline_stores.offline_store import OfflineStore, RetrievalJob, RetrievalMetadata
+from feast.infra.offline_stores.offline_store import (
+    OfflineStore,
+    RetrievalJob,
+    RetrievalMetadata,
+)
 from feast.on_demand_feature_view import OnDemandFeatureView
 from feast.registry import Registry
 from feast.repo_config import RepoConfig
+from feast.saved_dataset import SavedDatasetStorage
 from feast_postgres.type_map import pg_type_code_to_arrow
 from feast_postgres.utils import _get_conn, df_to_postgres_table, get_query_schema
 
@@ -141,7 +144,11 @@ class PostgreSQLOfflineStore(OfflineStore):
             )
 
             query_context = offline_utils.get_feature_view_query_context(
-                feature_refs, feature_views, registry, project, entity_df_event_timestamp_range,
+                feature_refs,
+                feature_views,
+                registry,
+                project,
+                entity_df_event_timestamp_range,
             )
 
             query_context = [asdict(context) for context in query_context]
@@ -179,7 +186,7 @@ class PostgreSQLOfflineStore(OfflineStore):
                 feature_refs, project, registry
             ),
         )
-    
+
     @staticmethod
     def pull_all_from_table_or_query(
         config: RepoConfig,
@@ -210,6 +217,7 @@ class PostgreSQLOfflineStore(OfflineStore):
             query=query,
             config=config,
             full_feature_names=False,
+            on_demand_feature_views=None,
         )
 
 
@@ -306,13 +314,16 @@ def _get_entity_df_event_timestamp_range(
         # If the entity_df is a string (SQL query), determine range
         # from table
         with _get_conn(config.offline_store) as conn, conn.cursor() as cur:
-            cur.execute(f"SELECT MIN({entity_df_event_timestamp_col}) AS min, MAX({entity_df_event_timestamp_col}) AS max FROM {table_name}"),
+            cur.execute(
+                f"SELECT MIN({entity_df_event_timestamp_col}) AS min, MAX({entity_df_event_timestamp_col}) AS max FROM {table_name}"
+            ),
             res = cur.fetchone()
-        entity_df_event_timestamp_range = (res[0],res[1])
+        entity_df_event_timestamp_range = (res[0], res[1])
     else:
         raise InvalidEntityType(type(entity_df))
 
     return entity_df_event_timestamp_range
+
 
 def _append_alias(field_names: List[str], alias: str) -> List[str]:
     return [f'{alias}."{field_name}"' for field_name in field_names]
