@@ -45,7 +45,6 @@ class PostgreSQLOfflineStoreConfig(PostgreSQLConfig):
     type: Literal[
         "feast_postgres.PostgreSQLOfflineStore"
     ] = "feast_postgres.PostgreSQLOfflineStore"
-    db_schema: StrictStr
 
 
 class PostgreSQLOfflineStore(OfflineStore):
