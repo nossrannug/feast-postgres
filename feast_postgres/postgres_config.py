@@ -12,3 +12,7 @@ class PostgreSQLConfig(FeastConfigBaseModel):
     db_schema: Optional[StrictStr] = None
     user: StrictStr
     password: StrictStr
+    sslrootcert_path: Optional[StrictStr] = None
+    sslcert_path: Optional[StrictStr] = None
+    sslkey_path: Optional[StrictStr] = None
+    sslmode: Optional[StrictStr] = None

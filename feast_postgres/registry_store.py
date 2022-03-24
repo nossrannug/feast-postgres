@@ -17,6 +17,10 @@ class PostgreSQLRegistryStore(RegistryStore):
             db_schema=config.db_schema,
             user=config.user,
             password=config.password,
+            sslrootcert_path=config.sslrootcert_path,
+            sslcert_path=config.sslcert_path,
+            sslkey_path=config.sslkey_path,
+            sslmode=config.sslmode
         )
         self.table_name = config.path
         self.cache_ttl_seconds = config.cache_ttl_seconds
