@@ -1,3 +1,8 @@
+# No longer maintained 🛑
+### This plugin is no longer maintained since [Feast](https://github.com/feast-dev/feast) now has [postgres support](https://github.com/feast-dev/feast/pull/2401).
+
+---
+
 # Feast PostgreSQL Support
 
 This repo adds PostgreSQL offline and online stores to [Feast](https://github.com/feast-dev/feast)
